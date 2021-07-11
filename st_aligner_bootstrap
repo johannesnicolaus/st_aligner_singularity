@@ -1,167 +1,71 @@
 Bootstrap: debootstrap
-OSVersion: xenial
+OSVersion: bionic
 MirrorURL: http://us.archive.ubuntu.com/ubuntu/
 IncludeCmd: apt-get
 
 %labels
-Maintainer alexander.stuckey@scilifelab.se
+Maintainer jose.fernandez.navarro@scilifelab.se
 Version 1.0
 
 %environment
-	SHELL=/bin/bash
-	export SHELL
+	LD_LIBRARY_PATH=/usr/local/lib
+	export LD_LIBRARY_PATH
 
 %post
 	#----------------------
 	#Install required tools
-	#---------------------
-	
-	echo "deb http://archive.ubuntu.com/ubuntu xenial main multiverse universe restricted" >> /etc/apt/sources.list
-	echo "deb http://archive.ubuntu.com/ubuntu xenial-updates main multiverse universe restricted" >> /etc/apt/sources.list
-	echo "deb http://archive.ubuntu.com/ubuntu xenial-backports main multiverse universe restricted" >> /etc/apt/sources.list
-	
-	apt-get -y install software-properties-common
-
-	add-apt-repository ppa:ubuntu-toolchain-r/test
-
+	#----------------------
 	apt-get -y update
-	apt-get -y upgrade
-	apt-get -y install wget sudo
-	apt-get -y install build-essential
-	apt-get -y install gcc-7 g++-7
-	apt-get -y install libboost-dev libboost-filesystem-dev libboost-program-options-dev libboost-system-dev libboost-thread-dev
-	apt-get -y install git libgtk2.0-dev pkg-config ctags libavcodec-dev libavformat-dev libswscale-dev libboost-all-dev ctags
-	apt-get -y install python-dev python-numpy libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libjasper-dev libdc1394-22-dev python-pip
-	apt-get -y install npm
-	pip install --upgrade pip
-	pip install pandas
-	apt-get -y install uwsgi uwsgi-core uwsgi-plugin-python
-	rm /bin/sh
-	ln -s /bin/bash /bin/sh
-	
-	mkdir tmppp
-	cd tmppp
-	wget https://cmake.org/files/v3.9/cmake-3.9.2.tar.gz
-	tar -zxvf cmake-3.9.2.tar.gz
-	cd cmake-3.9.2
-	./bootstrap
-	make
-	make install
-
-	update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 20
-	update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-7 20
-	update-alternatives --install /usr/bin/cc cc /usr/bin/gcc 30
-	update-alternatives --set cc /usr/bin/gcc
-	update-alternatives --install /usr/bin/c++ c++ /usr/bin/g++ 30
-	update-alternatives --set c++ /usr/bin/g++
-
-	update-alternatives --config gcc
-	update-alternatives --config g++
-
-	#----------------
-	#Make home folder
-	#----------------
-
-	mkdir -p /home/st_aligner
+	apt-get -y install software-properties-common
+	apt-add-repository universe
+	apt-get -y update
+	apt-get -y install git cmake wget
+	apt-get -y install python3.7 python3-pip
+    pip3 install --upgrade pip
+	wget -O - https://deb.nodesource.com/setup_9.x | bash
+	apt-get -y install nodejs
 
 	#--------------
 	#Install opencv
 	#--------------
+	apt-get -y install libopencv-dev
 
-	echo "Downloading and installing opencv 3.2.0"
-	mkdir -p /github_dl
-	cd /github_dl
-	wget https://github.com/opencv/opencv/archive/3.2.0.tar.gz
-	tar -zxvf 3.2.0.tar.gz
-	cd opencv-3.2.0
-	mkdir -p build
-	cd build
-	cmake -D CMAKE_BUILD_TYPE=Release -D CMAKE_INSTALL_PREFIX=/usr/local ..
-	make -j2
-	sudo make install	
+	#----------------
+	#Make home folder
+	#----------------
+	mkdir -p /home/st_spot_detector
+	cd /home/st_spot_detector
 
 	#----------------------------------
 	#Install tissue recognition library
 	#----------------------------------
-
-	echo "Installing tissue recognition library"
-	cd /github_dl
-	git clone https://github.com/SpatialTranscriptomicsResearch/tissue_recognition
-	cd tissue_recognition
+	git clone https://github.com/SpatialTranscriptomicsResearch/st_tissue_recognition
+	cd st_tissue_recognition
 	mkdir -p build
 	cd build
 	cmake ..
-	make install
-	pip install setuptools
+	make install -j`ls /sys/devices/system/cpu | grep -P '^cpu\d' | wc -l`
 	cd ../python-module
-	python setup.py install
-	
-	#------------------
-	#Install st aligner
-	#------------------
+	python3 setup.py install
+	cd ../..
 
-	echo "Installing st_aligner"
-	cd /github_dl
-	git clone https://github.com/SpatialTranscriptomicsResearch/st_aligner.git
-	cd st_aligner
-	pip install -r server/requirements.txt
-	pip install virtualenv
-	virtualenv /home/st_aligner/venv
-	. /home/st_aligner/venv/bin/activate
-	pip install -r server/requirements.txt
-	sed -i '/chdir/c\chdir = /home/st_aligner/server' /github_dl/st_aligner/server/uwsgi-server-config.ini
-	sed -i '/logto/c\logto = /home/st_aligner/server/logs/%n.log' /github_dl/st_aligner/server/uwsgi-server-config.ini
-	sed -i '/plugin/c\plugin = /usr/lib/uwsgi/plugins/python_plugin.so' /github_dl/st_aligner/server/uwsgi-server-config.ini
-	sed -i '/virtualenv/c\virtualenv = /home/st_aligner/venv' /github_dl/st_aligner/server/uwsgi-server-config.ini
-	sed -i '/static-map/c\static-map = /=/home/st_aligner/client' /github_dl/st_aligner/server/uwsgi-server-config.ini
-	sudo cp server/uwsgi-server-config.ini /etc/uwsgi/apps-available/
-	sudo ln -s /etc/uwsgi/apps-available/uwsgi-server-config.ini /etc/uwsgi/apps-enabled/uwsgi-server-config.ini
-	cd /github_dl/st_aligner/client
-	npm install
-	ln -s /usr/bin/nodejs /usr/bin/node
-	make DEVEL=1
-
-	#--------------------------------
-	#Set up folders to run st_aligner
-	#--------------------------------
-
-	cp -R /github_dl/st_aligner/server /home/st_aligner/server
-	cp -R /github_dl/st_aligner/client /home/st_aligner/client
-	mv /home/st_aligner/server/utils.py /home/st_aligner/server/utility.py
-	cp -R /github_dl/tissue_recognition/python-module/tissue_recognition/*.py /home/st_aligner/server
-	cp /github_dl/tissue_recognition/build/src/*.so /home/st_aligner/server
-	cp /github_dl/opencv-3.2.0/build/lib/libopencv_core.so.3.2 /home/st_aligner/server
-	cp /github_dl/opencv-3.2.0/build/lib/libopencv_imgproc.so.3.2 /home/st_aligner/server
-	mkdir -p /home/st_aligner/server/logs
-	ln -s /home/st_aligner/client /home/st_aligner/server/client
-
-	#-------------------------------
-	#Add coordinate adjusting script
-	#-------------------------------
-	cd /home/st_aligner
-	wget https://rawgit.com/Alexander-Stuckey/st_pipeline/master/scripts/adjust_matrix_coordinates.py
-		
-	#----------------------------
-	#Edit scripts to work locally
-	#----------------------------
-	
-	chmod -R 0777 /home/st_aligner/
-	cd /home/st_aligner/server
-	sed -i 's/utils/utility/g' server.py
-	sed -i 's@../client/devel@client/devel@g' server.py
-	sed -i 's/from . import utils/import utils/' tissue_recognition.py
-	sed -i '9,11d' tissue_recognition.py
-	sed -i 's@LIB_FILE@"/home/st_aligner/server/libtissue-recognition.so"@' tissue_recognition.py
+	#------------------------
+	#Install st spot detector
+	#------------------------
+	git clone https://github.com/SpatialTranscriptomicsResearch/st_spot_detector.git
+	cd st_spot_detector
+	git checkout tags/2.0.2
+	pip3 install -r server/requirements.txt
+	cd client
+	npm i graceful-fs
+	npm i
+	make dist
 
 	#--------
-	#Clean up
+	#Done! :)
 	#--------
-
-	rm /github_dl/*.tar.gz
 	exit 0
-	
-%runscript
 
-	echo "Starting uwsgi webserver..."
-	cd /home/st_aligner
-	uwsgi server/uwsgi-server-config.ini
+%runscript
+	cd /home/st_spot_detector/st_spot_detector/server
+	python3 -m app
